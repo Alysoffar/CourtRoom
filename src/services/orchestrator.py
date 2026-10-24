@@ -1,3 +1,4 @@
+import copy
 import re
 from typing import Generator, List, Dict, Tuple
 from src.config.settings import settings
@@ -14,17 +15,30 @@ class CourtroomOrchestrator:
         self, transcript: List[CourtTurn], active_role: AgentRole
     ) -> List[Dict[str, str]]:
         history = []
-        remaining_chars = settings.MAX_CONTEXT_CHARS
-        for turn in transcript[:-1]:  # Exclude the currently streaming turn
+        remaining_chars = getattr(settings, "MAX_CONTEXT_CHARS", 12000)
+
+        # Exclude the currently streaming turn (the last element)
+        for turn in transcript[:-1]:
+            if not turn.statement or not turn.statement.strip():
+                continue
+
             statement = turn.statement[-2600:]
+            # If the turn belongs to the active role, treat as assistant (their past statements),
+            # otherwise treat as user (opponent/court statements).
             role_tag = "assistant" if turn.role == active_role else "user"
             prefix = f"[Round {turn.round_number} - {turn.role.value}]: "
             content = prefix + statement
+
             if len(content) > remaining_chars:
                 break
+
             history.append({"role": role_tag, "content": content})
             remaining_chars -= len(content)
+
         return history
+
+    def _snapshot(self, case: CaseFile) -> CaseFile:
+        return copy.deepcopy(case)
 
     @staticmethod
     def extract_evidence_locker(transcript: List[CourtTurn]) -> str:
@@ -32,6 +46,8 @@ class CourtroomOrchestrator:
         exhibits = []
         pattern = re.compile(r"\[([^\]]*Exhibit[^\]]*)\]", re.IGNORECASE)
         for turn in transcript:
+            if not turn.statement:
+                continue
             matches = pattern.findall(turn.statement)
             for match in matches:
                 icon = "🔴" if turn.role == AgentRole.PROSECUTION else "🔵"
@@ -69,7 +85,7 @@ class CourtroomOrchestrator:
 
             for partial_text in self.llm.stream_turn(prosecutor_model, prosecutor_sys, pros_history):
                 pros_turn.statement = partial_text
-                yield case, self.extract_evidence_locker(case.transcript)
+                yield self._snapshot(case), self.extract_evidence_locker(case.transcript)
 
             # --- 2. Government Defense Turn ---
             def_turn = CourtTurn(current_round, AgentRole.DEFENSE, defense_model, "")
@@ -83,15 +99,16 @@ class CourtroomOrchestrator:
 
             for partial_text in self.llm.stream_turn(defense_model, defense_sys, def_history):
                 def_turn.statement = partial_text
-                yield case, self.extract_evidence_locker(case.transcript)
+                yield self._snapshot(case), self.extract_evidence_locker(case.transcript)
 
         # --- 3. Structured Jury Verdict ---
         full_transcript_text = "\n\n".join(
-            [f"Round {t.round_number} ({t.role.value}):\n{t.statement[-2200:]}" for t in case.transcript]
-        )[-settings.MAX_VERDICT_CONTEXT_CHARS:]
+            [f"Round {t.round_number} ({t.role.value}):\n{t.statement[-2200:]}" for t in case.transcript if t.statement]
+        )[-getattr(settings, "MAX_VERDICT_CONTEXT_CHARS", 12000):]
+
         case.verdict_report = self.llm.generate_structured_verdict(
             model=jury_model,
             system_prompt=jury_sys,
             transcript_prompt=f"Country: {country}\nIndictment: {crime}\n\nTranscript:\n{full_transcript_text}",
         )
-        yield case, self.extract_evidence_locker(case.transcript)
+        yield self._snapshot(case), self.extract_evidence_locker(case.transcript)

@@ -44,25 +44,47 @@ class GroqCourtroomProvider:
         self, model: str, system_prompt: str, transcript_prompt: str
     ) -> str:
         """Uses Groq's JSON mode + Pydantic validation to generate an air-tight Jury Verdict."""
-        schema_json = json.dumps(JuryVerdictSchema.model_json_schema(), indent=2)
+        schema_json = json.dumps(
+            JuryVerdictSchema.model_json_schema(), separators=(",", ":")
+        )
         strict_system = (
-            f"{system_prompt}\n\n"
-            f"You MUST respond ONLY with a valid JSON object matching this exact schema:\n{schema_json}"
+            f"{system_prompt}\n"
+            "Return one complete JSON object. Do not use Markdown, code fences, or "
+            "additional text. Keep every analysis and the sentence under 35 words.\n"
+            f"Required JSON schema:\n{schema_json}"
         )
-
-        response = self.client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": strict_system},
-                {"role": "user", "content": transcript_prompt},
-            ],
-            temperature=0.3,
-            max_completion_tokens=settings.MAX_VERDICT_COMPLETION_TOKENS,
-            response_format={"type": "json_object"},
-        )
+        try:
+            response = self.client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": strict_system},
+                    {"role": "user", "content": transcript_prompt},
+                ],
+                temperature=0.3,
+                max_completion_tokens=settings.MAX_VERDICT_COMPLETION_TOKENS,
+                response_format={"type": "json_object"},
+            )
+        except APIError as e:
+            if getattr(e, "status_code", None) == 400:
+                raise RuntimeError(
+                    "Groq could not generate the jury JSON verdict. "
+                    "Try one or two trial rounds with openai/gpt-oss-20b."
+                ) from e
+            raise
 
         raw_json = response.choices[0].message.content
         parsed = JuryVerdictSchema.model_validate_json(raw_json)
+
+        if (
+            parsed.prosecution_score >= 7
+            and parsed.prosecution_score >= parsed.defense_score + 2
+        ):
+            parsed.verdict = "GUILTY"
+        elif (
+            parsed.defense_score >= 7
+            and parsed.defense_score >= parsed.prosecution_score + 2
+        ):
+            parsed.verdict = "NOT GUILTY"
 
         badge = "🚨 **GUILTY**" if "GUILTY" in parsed.verdict.upper() and "NOT" not in parsed.verdict.upper() else "🛡️ **NOT GUILTY**"
         return (

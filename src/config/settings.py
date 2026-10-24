@@ -24,8 +24,8 @@ class GroqSettings:
     TEMPERATURE: float = 0.6
     MAX_COMPLETION_TOKENS: int = 320
     MAX_CONTEXT_CHARS: int = 12000
-    MAX_VERDICT_CONTEXT_CHARS: int = 9000
-    MAX_VERDICT_COMPLETION_TOKENS: int = 500
+    MAX_VERDICT_CONTEXT_CHARS: int = 6000
+    MAX_VERDICT_COMPLETION_TOKENS: int = 900
     MAX_RETRIES: int = 3
 
 settings = GroqSettings()
