@@ -1,6 +1,6 @@
 # CourtRoom AI
 
-CourtRoom AI is an interactive, game-style political and criminal tribunal built with Python, Gradio, Groq, and local text-to-speech.
+CourtRoom AI is an interactive, game-style political and criminal tribunal built with Python, FastAPI, Groq, and local text-to-speech.
 
 Users choose a jurisdiction and indictment, then watch an AI prosecution and AI defense present evidence in a streamed courtroom transcript. A jury model evaluates the debate and produces a structured verdict.
 
@@ -13,9 +13,9 @@ Users choose a jurisdiction and indictment, then watch an AI prosecution and AI 
 - Live streaming courtroom transcript
 - Evidence locker that extracts exhibits from arguments
 - Structured jury verdict with prosecution and defense scores
-- Courtroom-themed Gradio interface
-- Character placeholders for the prosecution, jury, and defense
-- Optional automatic speech playback for new arguments
+- Courtroom-themed Three.js and Tailwind browser interface
+- Animated characters for the prosecution, jury, and defense
+- Optional automatic speech playback for the final verdict
 - Manual replay using local Windows text-to-speech
 - Context and completion limits designed for Groq free-tier token limits
 
@@ -28,11 +28,23 @@ CourtRoom/
 ├── README.md
 ├── requirements.txt
 └── src/
+    ├── api/
+    │   ├── application.py
+    │   └── routes/
+    │       ├── static.py
+    │       ├── trial.py
+    │       └── tts.py
     ├── config/
+    │   ├── settings.py
+    │   └── trial_options.py
     ├── domain/
     ├── prompts/
     ├── services/
     └── ui/
+        ├── courtroom.html
+        └── static/
+            ├── app.js
+            └── styles.css
 ```
 
 ## Requirements
@@ -40,6 +52,7 @@ CourtRoom/
 - Python 3.10 or newer
 - A Groq API key
 - Windows Speech API support for local text-to-speech
+- A modern browser with WebSocket and WebGL support
 
 ## Setup
 
@@ -84,7 +97,7 @@ Keep the terminal running while using the application. Press `Ctrl+C` to stop th
 
 ## Text-to-speech
 
-Text-to-speech uses `pyttsx3` and the locally installed Windows speech engine. Enable **Speak new arguments automatically** to hear new arguments as they finish, or use **Replay** to hear the latest statement again.
+Text-to-speech uses `pyttsx3` and the locally installed Windows speech engine. Enable **Auto-TTS Verdict** to hear the final verdict automatically, or use **TTS** to replay the latest statement.
 
 If speech synthesis is unavailable, install the project requirements again and confirm that Windows has at least one installed speech voice.
 
@@ -96,7 +109,16 @@ The application defaults to:
 - `openai/gpt-oss-20b` for the defense
 - `openai/gpt-oss-20b` for the jury
 
-The model list is configured in `src/config/settings.py`. Available models can vary by Groq account. If Groq reports a `413` token-limit error, reduce the number of trial rounds and use `openai/gpt-oss-20b`.
+The model list is configured in `src/config/settings.py`, and available models can vary by Groq account. The application requests a maximum of 900 completion tokens to remain below common free-tier output limits. If Groq reports a `429` or `413` error, wait for the quota window to reset, reduce the number of trial rounds, or select a model available to your account.
+
+## API surface
+
+- `GET /` serves the courtroom web interface.
+- `GET /api/config` returns available models, preset indictments, and UI limits.
+- `POST /api/tts` synthesizes a local WAV file from text.
+- `WebSocket /ws/trial` streams courtroom arguments, evidence, and the final verdict.
+
+The browser assets are served from `/static`. The FastAPI application is assembled in `src/api/application.py`, while each route group has its own module under `src/api/routes/`.
 
 ## Security
 
@@ -107,8 +129,8 @@ The model list is configured in `src/config/settings.py`. Available models can v
 
 ## Development checks
 
-Compile the main modules to check syntax:
+Compile the application modules to check syntax:
 
 ```powershell
-python -m py_compile main.py src\ui\gradio_app.py src\services\tts_provider.py
+python -m py_compile main.py src\api\application.py src\api\routes\static.py src\api\routes\tts.py src\api\routes\trial.py src\config\settings.py src\config\trial_options.py src\services\llm_provider.py src\services\orchestrator.py src\services\tts_provider.py
 ```
