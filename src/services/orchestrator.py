@@ -22,7 +22,7 @@ class CourtroomOrchestrator:
         and merges the current round's instruction into the final 'user' turn.
         """
         selected_turns = []
-        remaining_chars = getattr(settings, "MAX_CONTEXT_CHARS", 12000)
+        remaining_chars = getattr(settings, "MAX_CONTEXT_CHARS", 8000)
 
         # Walk backward from the most recent completed turn so we never drop recent rounds
         for turn in reversed(transcript[:-1]):
@@ -131,7 +131,7 @@ class CourtroomOrchestrator:
                 for t in case.transcript
                 if t.statement and not t.statement.startswith("*[")
             ]
-        )[-getattr(settings, "MAX_VERDICT_CONTEXT_CHARS", 12000):]
+        )[-getattr(settings, "MAX_VERDICT_CONTEXT_CHARS", 6000):]
 
         case.verdict_report = self.llm.generate_structured_verdict(
             model=jury_model,

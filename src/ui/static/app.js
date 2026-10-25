@@ -370,6 +370,16 @@
     };
     let activeSocket = null;
     let lastBlipTime = 0;
+    let drawerRenderScheduled = false;
+
+    function scheduleDrawerRender() {
+      if (drawerRenderScheduled) return;
+      drawerRenderScheduled = true;
+      window.setTimeout(() => {
+        drawerRenderScheduled = false;
+        renderDrawerContent();
+      }, 120);
+    }
 
     async function loadConfig() {
       const res = await fetch('/api/config');
@@ -422,14 +432,16 @@
           bodyEl.innerHTML = `<p class="text-slate-400 italic">No arguments recorded yet.</p>`;
           return;
         }
-        bodyEl.innerHTML = appState.transcript.map((t, i) => {
+        bodyEl.innerHTML = appState.transcript.map((t) => {
           const isPros = t.role_key === 'PROSECUTION';
           const border = isPros ? 'border-rose-500/50 bg-rose-950/25' : 'border-sky-500/50 bg-sky-950/25';
           const badge  = isPros ? '🔴' : '🔵';
+          const statement = (t.statement || '*Streaming...*')
+            .replace(/^\s*\[Round\s+\d+\s*[–-]\s*[^\]]+\]\s*/i, '');
           return `
             <div class="p-3.5 rounded-xl border ${border}">
-              <div class="text-xs font-bold text-amber-300 mb-1.5">${badge} ${t.role_label} · Round ${t.round_number} (Turn #${i + 1})</div>
-              <div class="prose prose-invert prose-sm max-w-none text-slate-200 leading-relaxed">${marked.parse(t.statement || '*Streaming...*')}</div>
+              <div class="text-xs font-bold text-amber-300 mb-1.5">${badge} ${t.role_label} · Round ${t.round_number}</div>
+              <div class="prose prose-invert prose-sm max-w-none text-slate-200 leading-relaxed">${marked.parse(statement)}</div>
             </div>
           `;
         }).join('');
@@ -513,9 +525,10 @@
           ? '🟢 VERDICT DELIVERED · COURT ADJOURNED'
           : `🟢 LIVE STREAMING · ${data.round_label}`;
 
-        renderDrawerContent();
+        scheduleDrawerRender();
 
         if (data.is_complete) {
+          renderDrawerContent();
           toggleDrawer('verdict');
           if (document.getElementById('auto-tts-toggle').checked) {
             speakLatest();

@@ -24,8 +24,8 @@ class GroqSettings:
     TEMPERATURE: float = 0.6
     # Keep the request below Groq free-tier models with a 1000-token output limit.
     MAX_COMPLETION_TOKENS: int = 900
-    MAX_CONTEXT_CHARS: int = 12000
-    MAX_VERDICT_CONTEXT_CHARS: int = 8000
+    MAX_CONTEXT_CHARS: int = 8000
+    MAX_VERDICT_CONTEXT_CHARS: int = 6000
     MAX_VERDICT_COMPLETION_TOKENS: int = 900
     MAX_RETRIES: int = 3
 

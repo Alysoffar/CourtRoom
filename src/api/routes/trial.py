@@ -100,7 +100,7 @@ async def trial_websocket(websocket: WebSocket) -> None:
             now = time.monotonic()
             complete = bool(case.verdict_report)
             changed = len(case.transcript) != last_count
-            if not complete and not changed and now - last_sent < 0.035:
+            if not complete and not changed and now - last_sent < 0.12:
                 continue
             await websocket.send_json(_payload(case, evidence))
             last_count, last_sent = len(case.transcript), now
